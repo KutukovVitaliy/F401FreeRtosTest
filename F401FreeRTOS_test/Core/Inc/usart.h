@@ -12,7 +12,7 @@
 #define BUFFER_SIZE	255
 
 void USER_UART_IRQHandler(UART_HandleTypeDef *huart);
-void USAR_UART_IDLECallback(UART_HandleTypeDef *huart);
+void USER_UART_IDLECallback(UART_HandleTypeDef *huart);
 
 
 #endif /* INC_USART_H_ */

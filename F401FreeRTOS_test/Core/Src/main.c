@@ -24,9 +24,11 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "libmodbusrtu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
+typedef StaticQueue_t osStaticMessageQDef_t;
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -43,6 +45,7 @@
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart1_tx;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -57,6 +60,17 @@ const osThreadAttr_t ledBlynk_attributes = {
   .name = "ledBlynk",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for messQueue */
+osMessageQueueId_t messQueueHandle;
+uint8_t messQueueBuffer[ 128 * sizeof( uint8_t ) ];
+osStaticMessageQDef_t messQueueControlBlock;
+const osMessageQueueAttr_t messQueue_attributes = {
+  .name = "messQueue",
+  .cb_mem = &messQueueControlBlock,
+  .cb_size = sizeof(messQueueControlBlock),
+  .mq_mem = &messQueueBuffer,
+  .mq_size = sizeof(messQueueBuffer)
 };
 /* USER CODE BEGIN PV */
 osSemaphoreId_t BigMac;
@@ -83,7 +97,11 @@ int __io_putchar(int ch)
 	ITM_SendChar(ch);
 	return(ch);
 }
-
+//----------------------------------------------------------------------------
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+        // завершена передача всех данных
+}
 
 /* USER CODE END 0 */
 
@@ -121,7 +139,7 @@ int main(void)
   //size_t fre=xPortGetFreeHeapSize();
   printf("Programm started!\n");
   __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
-  	HAL_UART_Receive_DMA(&huart1, (uint8_t*)receive_buff, 255);
+  //	HAL_UART_Receive_DMA(&huart1, (uint8_t*)receive_buff, 255);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -139,6 +157,10 @@ int main(void)
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of messQueue */
+  messQueueHandle = osMessageQueueNew (128, sizeof(uint8_t), &messQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -235,7 +257,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -263,8 +285,11 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA2_Stream5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
+  /* DMA2_Stream7_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
 
 }
 
@@ -315,15 +340,22 @@ static void MX_GPIO_Init(void)
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
+	uint16_t data = 0;
+	modbus_init(500);
   /* Infinite loop */
   for(;;)
   {
-	  if(HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_0)==GPIO_PIN_RESET)
-	  	  {
-	  		  osSemaphoreRelease(BigMac);
+	  //if(HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_0)==GPIO_PIN_RESET)
+	  	  //{
+	  		  //osSemaphoreRelease(BigMac);
 
-	  	  }
-	  	  osDelay(200);
+	  	  //}
+	  	  //osDelay(200);
+
+	  modbus_readHoldingRegisters(0x01, 0x1C , 0x01, &data);
+	  printf("Receive Data = %d ",data);
+	  printf("\r\n");
+	  osDelay(2000);
   }
   /* USER CODE END 5 */
 }
